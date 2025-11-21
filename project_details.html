@@ -73,6 +73,12 @@
         .btn-add-task { width: 100%; background-color: #6366F1; color: white; border: none; padding: 14px; border-radius: 8px; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 8px; margin-top: 25px; transition: 0.2s; font-size: 1rem; }
         .project-task-list { margin-top: 20px; display: flex; flex-direction: column; gap: 15px; }
 
+        /* Task Tabs */
+        .tasks-header { display: flex; gap: 25px; border-bottom: 2px solid #F3F4F6; margin-bottom: 1.5rem; }
+        .task-tab { padding-bottom: 10px; cursor: pointer; font-weight: 600; color: #9CA3AF; position: relative; transition: color 0.2s; }
+        .task-tab.active { color: var(--primary-black); border-bottom: 2px solid var(--primary-black); }
+        .task-tab:hover:not(.active) { color: var(--text-main); }
+
         /* Task Card */
         .task-card { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 16px; padding: 1.2rem 1.5rem; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: transform 0.2s; position: relative; cursor: pointer; }
         .task-card:hover { transform: translateY(-2px); border-color: var(--primary-black); }
@@ -128,6 +134,7 @@
         .view-label { font-size: 0.75rem; color: #9CA3AF; font-weight: 700; margin-top: 15px; letter-spacing: 0.5px; text-transform: uppercase; }
         .view-val { font-size: 1rem; color: var(--text-main); margin-bottom: 5px; }
         #viewTaskDesc { white-space: pre-wrap; word-wrap: break-word; line-height: 1.6; color: #4B5563; background: #F9FAFB; padding: 15px; border-radius: 8px; margin-top: 5px; }
+        .empty-msg { text-align: center; color: #9CA3AF; font-size: 0.9rem; padding: 20px; }
 
         /* Mobile */
         @media (max-width: 768px) {
@@ -198,9 +205,17 @@
                     </div>
 
                     <div class="task-section">
-                        <div class="info-label" style="margin-bottom:15px;">TASKS</div>
-                        <div class="project-task-list" id="tasksList"></div>
-                        <button id="addTaskBtn" class="btn-add-task" onclick="openTaskModal()"><i class="ri-add-circle-fill"></i> Add New Sub Task</button>
+                        <div class="tasks-header">
+                            <div class="task-tab active" onclick="switchTaskTab('pending')">Pending Tasks</div>
+                            <div class="task-tab" onclick="switchTaskTab('completed')">Completed Tasks</div>
+                        </div>
+
+                        <div id="pendingTasksList" class="project-task-list"></div>
+                        <div id="completedTasksList" class="project-task-list" style="display:none;"></div>
+                        
+                        <button id="addTaskBtn" class="btn-add-task" onclick="openTaskModal()">
+                            <i class="ri-add-circle-fill"></i> Add New Sub Task
+                        </button>
                     </div>
                 </div>
 
@@ -388,11 +403,34 @@
             } catch (e) { alert("Error loading details."); }
         }
 
+        // --- TAB SWITCHING ---
+        window.switchTaskTab = (tabName) => {
+            const tabs = document.querySelectorAll('.task-tab');
+            tabs.forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            if(tabName === 'completed') {
+                document.getElementById('completedTasksList').style.display = 'flex';
+                document.getElementById('pendingTasksList').style.display = 'none';
+            } else {
+                document.getElementById('completedTasksList').style.display = 'none';
+                document.getElementById('pendingTasksList').style.display = 'flex';
+            }
+        }
+
+        // --- LOAD TASKS ---
         function loadTasks(pId) {
             const q = query(collection(db, "tasks"), where("projectId", "==", pId));
             onSnapshot(q, (snapshot) => {
-                const container = document.getElementById('tasksList');
-                container.innerHTML = "";
+                const pendingContainer = document.getElementById('pendingTasksList');
+                const completedContainer = document.getElementById('completedTasksList');
+                
+                pendingContainer.innerHTML = "";
+                completedContainer.innerHTML = "";
+
+                let pendCount = 0;
+                let compCount = 0;
+
                 snapshot.forEach(doc => {
                     const task = doc.data();
                     const taskIdDisplay = "#" + doc.id.substring(0, 6).toUpperCase();
@@ -403,6 +441,7 @@
                     const isAssignee = task.assignedTo === currentUser.email;
                     const isCreator = task.assignedBy === currentUser.email;
                     
+                    // Checkbox: Only Owner or Assignee can toggle
                     let checkboxHtml = '';
                     if(isOwner || isAssignee) {
                          const checkedClass = task.status === 'Completed' ? 'checked' : '';
@@ -412,6 +451,7 @@
                          checkboxHtml = `<div class="task-checkbox disabled" title="Only assignee can check"></div>`;
                     }
 
+                    // Actions: Owner or Creator can edit/delete
                     let ownerActions = '';
                     if(isOwner || isCreator) {
                         const tTitle = task.title.replace(/'/g, "\\'");
@@ -454,11 +494,23 @@
                             </div>
                         </div>
                     `;
-                    container.innerHTML += html;
+
+                    // Separate into lists based on status
+                    if(task.status === 'Completed') {
+                        completedContainer.innerHTML += html;
+                        compCount++;
+                    } else {
+                        pendingContainer.innerHTML += html;
+                        pendCount++;
+                    }
                 });
+
+                if(pendCount === 0) pendingContainer.innerHTML = '<div class="empty-msg">No pending tasks.</div>';
+                if(compCount === 0) completedContainer.innerHTML = '<div class="empty-msg">No completed tasks.</div>';
             });
         }
 
+        // --- VIEW & MODALS ---
         window.openViewTaskModal = (title, desc, start, end, assign, status, img) => {
             document.getElementById('viewTaskModal').classList.add('active');
             document.getElementById('viewTaskTitle').innerText = title;
@@ -476,6 +528,7 @@
         window.openTaskModal = () => { document.getElementById('taskModal').classList.add('active'); taskImageUrl = ""; document.getElementById('editTaskId').value = ""; document.getElementById('taskTitle').value = ""; document.getElementById('taskDescInput').value = ""; };
         window.closeTaskModal = () => document.getElementById('taskModal').classList.remove('active');
 
+        // --- CREATE/UPDATE TASK ---
         document.getElementById('taskImgInput').addEventListener('change', async (e) => {
             const file = e.target.files[0]; if(!file) return;
             const formData = new FormData(); formData.append('file', file); formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
@@ -536,46 +589,54 @@
         window.deleteTask = async (id) => { if(confirm("Delete task?")) await deleteDoc(doc(db, "tasks", id)); }
         window.toggleTask = async (id, status) => { const newStatus = status === 'Completed' ? 'Pending' : 'Completed'; await updateDoc(doc(db, "tasks", id), { status: newStatus }); }
 
+        // --- PROJECT ACTIONS ---
         window.openInviteModal = () => document.getElementById('inviteModal').classList.add('active');
         window.closeInviteModal = () => document.getElementById('inviteModal').classList.remove('active');
         window.sendProjectInvite = async () => { /* Same */ };
 
-        window.openEditProjectModal = () => document.getElementById('editProjectModal').classList.add('active');
+        // --- EDIT PROJECT (With Pre-fill Logic) ---
+        window.openEditProjectModal = () => {
+            document.getElementById('editProjectModal').classList.add('active');
+            // Use currentProjectData directly to avoid placeholder text issues
+            document.getElementById('editName').value = currentProjectData.name || "";
+            document.getElementById('editCategory').value = currentProjectData.category || "";
+            document.getElementById('editDesc').value = currentProjectData.description || "";
+            document.getElementById('editProgress').value = currentProjectData.progress || 0;
+            document.getElementById('editDueDate').value = currentProjectData.dueDate || "";
+            document.getElementById('editPriority').value = currentProjectData.priority || "High";
+        }
         window.closeEditProjectModal = () => document.getElementById('editProjectModal').classList.remove('active');
         
-        // --- FIXED SAVE PROJECT CHANGES LOGIC ---
         window.saveProjectChanges = async () => {
             const name = document.getElementById('editName').value;
             const category = document.getElementById('editCategory').value;
             const desc = document.getElementById('editDesc').value;
             const due = document.getElementById('editDueDate').value;
             const priority = document.getElementById('editPriority').value;
-            const progress = document.getElementById('editProgress').value;
+            let progress = parseInt(document.getElementById('editProgress').value) || 0;
 
             if(!name) return alert("Project Name is required");
 
+            // AUTO COMPLETE LOGIC
+            if(progress >= 100) progress = 100;
+            // Logic to update status badge based on progress happens in loadProjectDetails via DB read usually, 
+            // but here we update UI manually for instant feedback.
+
             try {
                 const projectRef = doc(db, "projects", projectId);
-                
-                // 1. Update Database
                 await updateDoc(projectRef, {
-                    name: name,
-                    category: category,
-                    description: desc,
-                    dueDate: due,
-                    priority: priority,
-                    progress: parseInt(progress) || 0
+                    name: name, category: category, description: desc,
+                    dueDate: due, priority: priority, progress: progress
                 });
 
-                // 2. Update UI Immediately (Since we don't use onSnapshot for details)
+                // Update UI
                 document.getElementById('pName').innerText = name;
                 document.getElementById('pCategory').innerText = category;
-                document.getElementById('pDesc').innerText = desc;
+                document.getElementById('pDesc').innerText = desc || "No description provided.";
                 document.getElementById('pDueDate').innerText = due || "N/A";
                 
                 const pPriority = document.getElementById('pPriority');
                 pPriority.innerText = priority;
-                // Update Priority Color
                 if(priority === 'High') pPriority.style.color = '#EF4444';
                 else if(priority === 'Medium') pPriority.style.color = '#F59E0B';
                 else pPriority.style.color = '#10B981';
@@ -583,13 +644,18 @@
                 document.getElementById('pProgressText').innerText = progress + "%";
                 document.getElementById('pProgressBar').style.width = progress + "%";
 
+                const statusBadge = document.getElementById('pStatus');
+                if(progress >= 100) {
+                    statusBadge.innerText = "Completed";
+                    statusBadge.className = "status-badge status-completed";
+                } else {
+                    statusBadge.innerText = "In Progress";
+                    statusBadge.className = "status-badge status-in-progress";
+                }
+
                 alert("Project updated successfully!");
                 closeEditProjectModal();
-                
-            } catch (e) {
-                console.error(e);
-                alert("Error updating project: " + e.message);
-            }
+            } catch (e) { console.error(e); alert("Error updating project: " + e.message); }
         };
 
         window.logout = () => signOut(auth).then(() => window.location.href = "login.html");
