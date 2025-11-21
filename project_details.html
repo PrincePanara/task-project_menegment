@@ -362,11 +362,26 @@
                     document.getElementById('pDesc').innerText = data.description || "No description.";
                     document.getElementById('pDate').innerText = new Date(data.createdAt.toDate()).toLocaleDateString();
                     document.getElementById('pDueDate').innerText = data.dueDate || "N/A";
-                    document.getElementById('pPriority').innerText = data.priority || "High";
+                    const priority = data.priority || "High";
+                    const pPriorityElem = document.getElementById('pPriority');
+                    pPriorityElem.innerText = priority;
+                    if(priority === 'High') pPriorityElem.style.color = '#EF4444';
+                    else if(priority === 'Medium') pPriorityElem.style.color = '#F59E0B';
+                    else if(priority === 'Low') pPriorityElem.style.color = '#10B981';
                     
                     const progress = data.progress || 0;
                     document.getElementById('pProgressText').innerText = progress + "%";
                     document.getElementById('pProgressBar').style.width = progress + "%";
+
+                    // Update status badge based on progress
+                    const statusBadge = document.getElementById('pStatus');
+                    if(progress >= 100) {
+                        statusBadge.innerText = "Completed";
+                        statusBadge.className = "status-badge status-completed";
+                    } else {
+                        statusBadge.innerText = "In Progress";
+                        statusBadge.className = "status-badge status-in-progress";
+                    }
 
                     document.getElementById('leaderEmail').innerText = data.access_list[0];
                     document.getElementById('leaderName').innerText = data.access_list[0].split('@')[0].toUpperCase();
@@ -525,7 +540,16 @@
         }
         window.closeViewTaskModal = () => document.getElementById('viewTaskModal').classList.remove('active');
 
-        window.openTaskModal = () => { document.getElementById('taskModal').classList.add('active'); taskImageUrl = ""; document.getElementById('editTaskId').value = ""; document.getElementById('taskTitle').value = ""; document.getElementById('taskDescInput').value = ""; };
+        window.openTaskModal = () => { 
+            document.getElementById('taskModal').classList.add('active'); 
+            document.getElementById('taskModalTitle').innerText = "Add New Task";
+            taskImageUrl = ""; 
+            document.getElementById('editTaskId').value = ""; 
+            document.getElementById('taskTitle').value = ""; 
+            document.getElementById('taskDescInput').value = ""; 
+            document.getElementById('taskImgPreview').style.display = 'none';
+            document.getElementById('taskUploadPlaceholder').style.display = 'block';
+        };
         window.closeTaskModal = () => document.getElementById('taskModal').classList.remove('active');
 
         // --- CREATE/UPDATE TASK ---
