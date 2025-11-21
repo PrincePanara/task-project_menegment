@@ -221,8 +221,8 @@
             <img id="modalAvatarPreview" src="https://ui-avatars.com/api/?name=User&size=128" alt="Avatar Preview" class="avatar-preview">
             <div class="avatar-upload-buttons">
                 <input type="file" id="avatarFileInput" class="file-input" accept="image/*">
-                <button class="btn-upload-avatar" onclick="document.getElementById('avatarFileInput').click()">Change Photo</button>
-                <button class="btn-upload-avatar" style="color: #EF4444; border-color: #EF4444;" onclick="removeAvatar()">Remove</button>
+                <button class="btn-upload-avatar" onclick="document.getElementById('avatarFileInput').click()"><i class="ri-upload-cloud-2-line"></i> Change Photo</button>
+                <button class="btn-upload-avatar" style="color: #EF4444; border-color: #EF4444;" onclick="removeAvatar()"><i class="ri-delete-bin-line"></i> Remove</button>
             </div>
         </div>
 
@@ -259,3 +259,186 @@
         </div>
     </div>
 </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+    import { getAuth, updateProfile } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDL6UGG7s7o-MC24qpHS77LgY54jxD0sRI",
+        authDomain: "taskmanagement-60f9b.firebaseapp.com",
+        projectId: "taskmanagement-60f9b",
+        storageBucket: "taskmanagement-60f9b.firebasestorage.app",
+        messagingSenderId: "761115679422",
+        appId: "1:761115679422:web:ee166eb1935bd360aa9cef",
+        measurementId: "G-F55KPBTQ3G"
+    };
+
+    const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dl6gzgu6i/image/upload";
+    const CLOUDINARY_UPLOAD_PRESET = "NEWSIMAGE";
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentUser = null;
+    let currentUserData = null;
+    let uploadedImageUrl = '';
+
+    auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            currentUser = user;
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists()) {
+                currentUserData = userDoc.data();
+            }
+        }
+    });
+
+    // Avatar file input handler with Cloudinary upload
+    document.getElementById('avatarFileInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+        try {
+            const response = await fetch(CLOUDINARY_URL, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            uploadedImageUrl = data.secure_url;
+            document.getElementById('modalAvatarPreview').src = uploadedImageUrl;
+        } catch (error) {
+            console.error('Image upload failed:', error);
+            alert('Failed to upload image');
+        }
+    });
+
+    // Remove avatar function
+    window.removeAvatar = () => {
+        document.getElementById('modalAvatarPreview').src = `https://ui-avatars.com/api/?name=${currentUser?.displayName || 'User'}&size=128`;
+        document.getElementById('avatarFileInput').value = '';
+        uploadedImageUrl = '';
+    };
+
+    // Close edit profile modal
+    window.closeEditProfileModal = () => {
+        document.getElementById('editProfileModal').classList.remove('active');
+    };
+
+    // Open edit profile modal and load current data
+    window.openEditProfileModal = async () => {
+        if (!currentUser) {
+            alert('Please log in first');
+            return;
+        }
+
+        document.getElementById('editProfileModal').classList.add('active');
+
+        // Load current user data
+        document.getElementById('editFullName').value = currentUser.displayName || '';
+        document.getElementById('modalAvatarPreview').src = currentUser.photoURL || `https://ui-avatars.com/api/?name=${currentUser.displayName}&size=128`;
+
+        if (currentUserData) {
+            document.getElementById('editRole').value = currentUserData.role || '';
+            document.getElementById('editLocation').value = currentUserData.location || '';
+            document.getElementById('editAboutMe').value = currentUserData.about || '';
+            renderEditSkills(currentUserData.skills || []);
+        } else {
+            renderEditSkills([]);
+        }
+
+        uploadedImageUrl = currentUser.photoURL || '';
+    };
+
+    // Render skills
+    function renderEditSkills(skills) {
+        const wrapper = document.getElementById('skillsInputWrapper');
+        wrapper.innerHTML = '';
+
+        skills.forEach(skill => {
+            if (skill && skill.trim()) {
+                const tag = document.createElement('div');
+                tag.className = 'skill-tag';
+                tag.innerHTML = `<span>${skill}</span> <span class="remove-skill" onclick="this.parentElement.remove()">×</span>`;
+                wrapper.appendChild(tag);
+            }
+        });
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'skills-add-input';
+        input.placeholder = 'Add a skill and press Enter';
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && this.value.trim()) {
+                e.preventDefault();
+                const tag = document.createElement('div');
+                tag.className = 'skill-tag';
+                tag.innerHTML = `<span>${this.value.trim()}</span> <span class="remove-skill" onclick="this.parentElement.remove()">×</span>`;
+                wrapper.insertBefore(tag, input);
+                this.value = '';
+            }
+        });
+        wrapper.appendChild(input);
+    }
+
+    // Save profile changes
+    window.saveProfileChanges = async () => {
+        if (!currentUser) {
+            alert('Please log in first');
+            return;
+        }
+
+        const fullName = document.getElementById('editFullName').value.trim();
+        const role = document.getElementById('editRole').value.trim();
+        const location = document.getElementById('editLocation').value.trim();
+        const about = document.getElementById('editAboutMe').value.trim();
+
+        if (!fullName) {
+            alert('Full name is required');
+            return;
+        }
+
+        // Get skills from tags
+        const skillTags = document.querySelectorAll('#skillsInputWrapper .skill-tag');
+        const skills = Array.from(skillTags).map(tag => {
+            const spans = tag.querySelectorAll('span');
+            return spans[0].textContent.trim();
+        });
+
+        try {
+            // Update Firebase Auth displayName
+            await updateProfile(currentUser, {
+                displayName: fullName,
+                photoURL: uploadedImageUrl || currentUser.photoURL
+            });
+
+            // Update Firestore user document
+            await setDoc(doc(db, 'users', currentUser.uid), {
+                role: role,
+                location: location,
+                about: about,
+                skills: skills,
+                profileImage: uploadedImageUrl || currentUser.photoURL,
+                updatedAt: new Date()
+            }, { merge: true });
+
+            alert('Profile updated successfully!');
+            closeEditProfileModal();
+
+            // Refresh page to see changes
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+
+        } catch (error) {
+            console.error('Error saving profile:', error);
+            alert('Error saving profile: ' + error.message);
+        }
+    };
+</script>
