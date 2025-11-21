@@ -129,24 +129,19 @@
         .view-val { font-size: 1rem; color: var(--text-main); margin-bottom: 5px; }
         #viewTaskDesc { white-space: pre-wrap; word-wrap: break-word; line-height: 1.6; color: #4B5563; background: #F9FAFB; padding: 15px; border-radius: 8px; margin-top: 5px; }
 
-        /* --- MOBILE RESPONSIVE STYLES --- */
+        /* Mobile */
         @media (max-width: 768px) {
             body { flex-direction: column; height: auto; overflow-y: auto; }
             .sidebar { display: none; }
             .main-content { width: 100%; padding: 1rem; overflow: visible; }
-            
             .details-grid { grid-template-columns: 1fr; gap: 1.5rem; }
-            
             .detail-header { flex-direction: column; align-items: flex-start; gap: 15px; }
             .project-title-area { flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; }
             .title-row { width: 100%; justify-content: space-between; }
-            
-            /* Task Card Mobile */
             .task-card { flex-direction: column; align-items: flex-start; gap: 15px; }
             .task-left-col { width: 100%; }
             .task-mid-col { width: 100%; justify-content: space-between; gap: 10px; border-top: 1px solid #f3f4f6; padding-top: 10px; }
             .task-right-col { width: 100%; justify-content: space-between; border-top: 1px solid #f3f4f6; padding-top: 10px; }
-            
             .modal-content { width: 95%; margin: 10px; max-height: 85vh; padding: 1.5rem; }
             .project-cover-img { height: 200px; }
         }
@@ -512,6 +507,7 @@
                     await addDoc(collection(db, "tasks"), taskData);
                     alert("Task Created");
                 }
+                
                 if(assignee !== currentUser.email) {
                     await addDoc(collection(db, "notifications"), {
                         toEmail: assignee, fromEmail: currentUser.email, title: "New Task Assigned",
@@ -546,7 +542,55 @@
 
         window.openEditProjectModal = () => document.getElementById('editProjectModal').classList.add('active');
         window.closeEditProjectModal = () => document.getElementById('editProjectModal').classList.remove('active');
-        window.saveProjectChanges = async () => { /* Same */ };
+        
+        // --- FIXED SAVE PROJECT CHANGES LOGIC ---
+        window.saveProjectChanges = async () => {
+            const name = document.getElementById('editName').value;
+            const category = document.getElementById('editCategory').value;
+            const desc = document.getElementById('editDesc').value;
+            const due = document.getElementById('editDueDate').value;
+            const priority = document.getElementById('editPriority').value;
+            const progress = document.getElementById('editProgress').value;
+
+            if(!name) return alert("Project Name is required");
+
+            try {
+                const projectRef = doc(db, "projects", projectId);
+                
+                // 1. Update Database
+                await updateDoc(projectRef, {
+                    name: name,
+                    category: category,
+                    description: desc,
+                    dueDate: due,
+                    priority: priority,
+                    progress: parseInt(progress) || 0
+                });
+
+                // 2. Update UI Immediately (Since we don't use onSnapshot for details)
+                document.getElementById('pName').innerText = name;
+                document.getElementById('pCategory').innerText = category;
+                document.getElementById('pDesc').innerText = desc;
+                document.getElementById('pDueDate').innerText = due || "N/A";
+                
+                const pPriority = document.getElementById('pPriority');
+                pPriority.innerText = priority;
+                // Update Priority Color
+                if(priority === 'High') pPriority.style.color = '#EF4444';
+                else if(priority === 'Medium') pPriority.style.color = '#F59E0B';
+                else pPriority.style.color = '#10B981';
+
+                document.getElementById('pProgressText').innerText = progress + "%";
+                document.getElementById('pProgressBar').style.width = progress + "%";
+
+                alert("Project updated successfully!");
+                closeEditProjectModal();
+                
+            } catch (e) {
+                console.error(e);
+                alert("Error updating project: " + e.message);
+            }
+        };
 
         window.logout = () => signOut(auth).then(() => window.location.href = "login.html");
     </script>
